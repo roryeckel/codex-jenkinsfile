@@ -2,7 +2,7 @@ pipeline {
     agent any // Specify a particular agent if needed (e.g., one with Node.js/npm and Git)
 
     parameters {
-        string(name: 'PROMPT', description: 'Prompt for OpenAI Codex', required: true)
+        string(name: 'PROMPT', description: 'Prompt for OpenAI Codex')
         credentials(name: 'OPENAI_API_KEY_CREDENTIAL_ID', description: 'Jenkins Credential ID for OpenAI API Key (Secret text type)', required: true, credentialType: 'com.cloudbees.plugins.credentials.impl.StringCredentialsImpl')
         string(name: 'OPENAI_API_BASE_URL', defaultValue: 'https://api.openai.com/v1', description: 'OpenAI API Base URL (e.g., for Azure OpenAI or other providers)')
         string(name: 'GIT_USER_NAME', defaultValue: 'Jenkins CI', description: 'Git user name for commits')
