@@ -1,4 +1,6 @@
 pipeline {
+    import java.net.URLEncoder; // Moved to the top level of the pipeline block
+
     agent any // Specify a particular agent if needed (e.g., one with Node.js/npm and Git)
 
     parameters {
@@ -33,8 +35,6 @@ pipeline {
         stage('Initialize Workspace') {
             steps {
                 script {
-                    import java.net.URLEncoder
-                    
                     echo "Initializing/refreshing workspace for repository: ${params.GIT_REPO_URL}, branch: ${params.GIT_BRANCH}"
                     sh "git init"
                     sh "git remote rm origin || true" // Remove existing origin, if any, ignore error if not present
