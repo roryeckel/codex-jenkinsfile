@@ -33,6 +33,8 @@ pipeline {
         stage('Initialize Workspace') {
             steps {
                 script {
+                    import java.net.URLEncoder
+                    
                     echo "Initializing/refreshing workspace for repository: ${params.GIT_REPO_URL}, branch: ${params.GIT_BRANCH}"
                     sh "git init"
                     sh "git remote rm origin || true" // Remove existing origin, if any, ignore error if not present
@@ -41,9 +43,7 @@ pipeline {
                     if (params.GIT_CREDENTIAL_ID != null && !params.GIT_CREDENTIAL_ID.isEmpty()) {
                         echo "Using GIT_CREDENTIAL_ID for repository access."
                         withCredentials([usernamePassword(credentialsId: params.GIT_CREDENTIAL_ID, usernameVariable: 'GIT_USERNAME_PLAIN', passwordVariable: 'GIT_PASSWORD_PLAIN')]) {
-                            // Import URLEncoder for handling special characters in credentials
-                            import java.net.URLEncoder
-
+                            
                             def encodedUsername = URLEncoder.encode(GIT_USERNAME_PLAIN, "UTF-8")
                             def encodedPassword = URLEncoder.encode(GIT_PASSWORD_PLAIN, "UTF-8")
                             
