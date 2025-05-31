@@ -10,6 +10,7 @@ pipeline {
         string(name: 'GIT_USER_NAME', defaultValue: 'Jenkins CI', description: 'Git user name for commits')
         string(name: 'GIT_USER_EMAIL', defaultValue: 'jenkins@example.com', description: 'Git user email for commits')
         credentials(name: 'GIT_CREDENTIAL_ID', description: 'Jenkins Credential ID for Git push (optional, e.g., SSH key or username/password if not globally configured on agent)', credentialType: "com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl")
+        string(name: 'MODEL', defaultValue: 'openai/o4-mini', description: 'Model to use for OpenAI Codex')
     }
 
     stages {
@@ -87,7 +88,7 @@ pipeline {
                         echo "Invoking Codex with prompt: '${params.PROMPT}'"
                         
                         # Since it's installed locally, we use the path from node_modules
-                        ./node_modules/.bin/codex "${params.PROMPT}" --approval-mode full-auto
+                        ./node_modules/.bin/codex "${params.PROMPT}" --model "${params.MODEL}" --approval-mode full-auto
                     """
                 }
             }
