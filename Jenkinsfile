@@ -43,7 +43,7 @@ pipeline {
                         withCredentials([usernamePassword(credentialsId: params.GIT_CREDENTIAL_ID, usernameVariable: 'GIT_USERNAME_PLAIN', passwordVariable: 'GIT_PASSWORD_PLAIN')]) {
                             
                             def encodedUsername = java.net.URLEncoder.encode(GIT_USERNAME_PLAIN, "UTF-8")
-                            def encodedPassword = java.net.URLEncoder.encode(GIT_PASSWORD_PLAIN, "UTF-8")
+                            def encodedPassword = java.net.URLEncoder.encode(GIT_PASSWORD_PLAIN, "UTF-8").replace('+', '%20')
                             
                             def repoUrlNoProto = params.GIT_REPO_URL.replace("https://", "").replace("http://", "")
                             def authenticatedRepoUrl = "https://${encodedUsername}:${encodedPassword}@${repoUrlNoProto}"
