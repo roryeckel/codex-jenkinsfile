@@ -72,10 +72,7 @@ pipeline {
         stage('Install Codex CLI') {
             steps {
                 echo "Installing OpenAI Codex CLI..."
-                // Ensure Node.js and npm are available on the agent
-                // The -g flag installs it globally. Ensure the Jenkins user has permissions
-                // and the global bin directory is in PATH for subsequent stages.
-                sh 'npm install -g @openai/codex'
+                sh 'npm install @openai/codex'
             }
         }
 
@@ -89,9 +86,8 @@ pipeline {
                         echo "OpenAI API Key and Base URL environment variables set."
                         echo "Invoking Codex with prompt: '${params.PROMPT}'"
                         
-                        # Ensure codex command is found. If npm global path issues, might need:
-                        # export PATH=\$PATH:\$(npm prefix -g)/bin
-                        codex "${params.PROMPT}" --approval-mode full-auto
+                        # Since it's installed locally, we use the path from node_modules
+                        ./node_modules/.bin/codex "${params.PROMPT}" --approval-mode full-auto
                     """
                 }
             }
