@@ -40,11 +40,18 @@ pipeline {
                     def repoUrlToUse = params.GIT_REPO_URL
                     if (params.GIT_CREDENTIAL_ID != null && !params.GIT_CREDENTIAL_ID.isEmpty()) {
                         echo "Using GIT_CREDENTIAL_ID for repository access."
-                        withCredentials([usernamePassword(credentialsId: params.GIT_CREDENTIAL_ID, usernameVariable: 'GIT_USERNAME', passwordVariable: 'GIT_PASSWORD')]) {
-                            def repoUrlNoProto = params.GIT_REPO_URL.replace("https://", "").replace("http://", "")
-                            repoUrlToUse = "https://${GIT_USERNAME}:${GIT_PASSWORD}@${repoUrlNoProto}"
+                        withCredentials([usernamePassword(credentialsId: params.GIT_CREDENTIAL_ID, usernameVariable: 'GIT_USERNAME_PLAIN', passwordVariable: 'GIT_PASSWORD_PLAIN')]) {
+                            // Import URLEncoder for handling special characters in credentials
+                            import java.net.URLEncoder
+
+                            def encodedUsername = URLEncoder.encode(GIT_USERNAME_PLAIN, "UTF-8")
+                            def encodedPassword = URLEncoder.encode(GIT_PASSWORD_PLAIN, "UTF-8")
                             
-                            sh "git remote add origin \"${repoUrlToUse}\""
+                            def repoUrlNoProto = params.GIT_REPO_URL.replace("https://", "").replace("http://", "")
+                            def authenticatedRepoUrl = "https://${encodedUsername}:${encodedPassword}@${repoUrlNoProto}"
+                            
+                            echo "Configuring remote 'origin' with URL-encoded credentials."
+                            sh "git remote add origin \"${authenticatedRepoUrl}\""
                             sh "git fetch origin ${params.GIT_BRANCH}"
                             sh "git checkout -f ${params.GIT_BRANCH}" // Switch to or create the local branch, force if necessary
                             sh "git reset --hard origin/${params.GIT_BRANCH}" // Reset the local branch to exactly match the state of the remote branch
