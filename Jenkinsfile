@@ -3,8 +3,8 @@ pipeline {
 
     parameters {
         string(name: 'PROMPT', description: 'Prompt for OpenAI Codex', required: true)
-        credentials(name: 'OPENAI_API_KEY_CREDENTIAL_ID', description: 'Jenkins Credential ID for OpenAI API Key (Secret text type)', required: true)
-        string(name: 'OPENAI_API_BASE_URL', defaultValue: 'https://api.openai.com/v1', description: 'OpenAI API Base URL (e.g., for Azure OpenAI or other providers)', credentialType: 'com.cloudbees.plugins.credentials.impl.StringCredentialsImpl')
+        credentials(name: 'OPENAI_API_KEY_CREDENTIAL_ID', description: 'Jenkins Credential ID for OpenAI API Key (Secret text type)', required: true, credentialType: 'com.cloudbees.plugins.credentials.impl.StringCredentialsImpl')
+        string(name: 'OPENAI_API_BASE_URL', defaultValue: 'https://api.openai.com/v1', description: 'OpenAI API Base URL (e.g., for Azure OpenAI or other providers)')
         string(name: 'GIT_USER_NAME', defaultValue: 'Jenkins CI', description: 'Git user name for commits')
         string(name: 'GIT_USER_EMAIL', defaultValue: 'jenkins@example.com', description: 'Git user email for commits')
         credentials(name: 'GIT_CREDENTIAL_ID', description: 'Jenkins Credential ID for Git push (optional, e.g., SSH key or username/password if not globally configured on agent)', credentialType: "com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl")
