@@ -1,6 +1,4 @@
 pipeline {
-    import java.net.URLEncoder; // Moved to the top level of the pipeline block
-
     agent any // Specify a particular agent if needed (e.g., one with Node.js/npm and Git)
 
     parameters {
@@ -44,8 +42,8 @@ pipeline {
                         echo "Using GIT_CREDENTIAL_ID for repository access."
                         withCredentials([usernamePassword(credentialsId: params.GIT_CREDENTIAL_ID, usernameVariable: 'GIT_USERNAME_PLAIN', passwordVariable: 'GIT_PASSWORD_PLAIN')]) {
                             
-                            def encodedUsername = URLEncoder.encode(GIT_USERNAME_PLAIN, "UTF-8")
-                            def encodedPassword = URLEncoder.encode(GIT_PASSWORD_PLAIN, "UTF-8")
+                            def encodedUsername = java.net.URLEncoder.encode(GIT_USERNAME_PLAIN, "UTF-8")
+                            def encodedPassword = java.net.URLEncoder.encode(GIT_PASSWORD_PLAIN, "UTF-8")
                             
                             def repoUrlNoProto = params.GIT_REPO_URL.replace("https://", "").replace("http://", "")
                             def authenticatedRepoUrl = "https://${encodedUsername}:${encodedPassword}@${repoUrlNoProto}"
