@@ -32,17 +32,35 @@ pipeline {
 
         stage('Initialize Workspace') {
             steps {
-                echo "Initializing/refreshing workspace for repository: ${params.GIT_REPO_URL}, branch: ${params.GIT_BRANCH}"
-                sh "git init"
-                sh "git remote rm origin || true" // Remove existing origin, if any, ignore error if not present
-                sh "git remote add origin ${params.GIT_REPO_URL}"
-                sh "git fetch origin ${params.GIT_BRANCH}" // Fetch updates for the specified branch
-                sh "git checkout -f ${params.GIT_BRANCH}" // Switch to or create the local branch, force if necessary
-                // Reset the local branch to exactly match the state of the remote branch
-                sh "git reset --hard origin/${params.GIT_BRANCH}"
-                // Remove any untracked files and directories to ensure a clean workspace
-                sh "git clean -fdx"
-                sh "git status" // Verify Git repository and branch
+                script {
+                    echo "Initializing/refreshing workspace for repository: ${params.GIT_REPO_URL}, branch: ${params.GIT_BRANCH}"
+                    sh "git init"
+                    sh "git remote rm origin || true" // Remove existing origin, if any, ignore error if not present
+
+                    def repoUrlToUse = params.GIT_REPO_URL
+                    if (params.GIT_CREDENTIAL_ID != null && !params.GIT_CREDENTIAL_ID.isEmpty()) {
+                        echo "Using GIT_CREDENTIAL_ID for repository access."
+                        withCredentials([usernamePassword(credentialsId: params.GIT_CREDENTIAL_ID, usernameVariable: 'GIT_USERNAME', passwordVariable: 'GIT_PASSWORD')]) {
+                            def repoUrlNoProto = params.GIT_REPO_URL.replace("https://", "").replace("http://", "")
+                            repoUrlToUse = "https://${GIT_USERNAME}:${GIT_PASSWORD}@${repoUrlNoProto}"
+                            
+                            sh "git remote add origin \"${repoUrlToUse}\""
+                            sh "git fetch origin ${params.GIT_BRANCH}"
+                            sh "git checkout -f ${params.GIT_BRANCH}" // Switch to or create the local branch, force if necessary
+                            sh "git reset --hard origin/${params.GIT_BRANCH}" // Reset the local branch to exactly match the state of the remote branch
+                        }
+                    } else {
+                        echo "No GIT_CREDENTIAL_ID provided or it's empty. Attempting anonymous access or agent pre-configured credentials."
+                        sh "git remote add origin \"${repoUrlToUse}\"" // Uses original params.GIT_REPO_URL
+                        sh "git fetch origin ${params.GIT_BRANCH}"
+                        sh "git checkout -f ${params.GIT_BRANCH}"
+                        sh "git reset --hard origin/${params.GIT_BRANCH}"
+                    }
+                    
+                    // Remove any untracked files and directories to ensure a clean workspace
+                    sh "git clean -fdx"
+                    sh "git status" // Verify Git repository and branch
+                }
             }
         }
 
@@ -111,34 +129,14 @@ pipeline {
                     sh "git commit -m 'Changes by Codex (Build ${BUILD_NUMBER})\n\nPrompt: ${params.PROMPT}'"
 
                     echo "Committing and pushing to branch ${branchName}..."
-                    // Handle Git push credentials
+                    // The 'origin' remote should have been configured with credentials in the 'Initialize Workspace' stage 
+                    // if GIT_CREDENTIAL_ID was provided and is of Username/Password type.
                     if (params.GIT_CREDENTIAL_ID != null && !params.GIT_CREDENTIAL_ID.isEmpty()) {
-                        // Example for SSH key credentials. Adjust type for username/password.
-                        // For usernamePassword, it would be:
-                        // withCredentials([usernamePassword(credentialsId: params.GIT_CREDENTIAL_ID, usernameVariable: 'GIT_USERNAME', passwordVariable: 'GIT_PASSWORD')]) {
-                        //    sh 'git push https://\${GIT_USERNAME}:\${GIT_PASSWORD}@yourgithost.com/yourrepo.git ${branchName}'
-                        // }
-                        // For SSH:
-                        withCredentials([sshUserPrivateKey(credentialsId: params.GIT_CREDENTIAL_ID, keyFileVariable: 'GIT_SSH_KEY', passphraseVariable: 'GIT_SSH_PASSPHRASE', usernameVariable: 'GIT_SSH_USERNAME')]) {
-                            // The GIT_SSH_COMMAND environment variable can be used to specify the SSH command with the key.
-                            // This often requires more setup (e.g. known_hosts).
-                            // A simpler approach for SSH is often to ensure the Jenkins agent's SSH environment is pre-configured.
-                            // However, if using explicit key:
-                            sh """
-                                # Ensure correct permissions for the SSH key file
-                                mkdir -p ~/.ssh
-                                cp "\${GIT_SSH_KEY}" ~/.ssh/id_rsa_jenkins_job
-                                chmod 600 ~/.ssh/id_rsa_jenkins_job
-                                export GIT_SSH_COMMAND="ssh -i ~/.ssh/id_rsa_jenkins_job -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
-                                git push origin ${branchName}
-                                rm -f ~/.ssh/id_rsa_jenkins_job # Clean up key
-                            """
-                        }
+                        echo "Attempting to push using credentials provided by GIT_CREDENTIAL_ID (expected to be embedded in 'origin' remote URL)."
                     } else {
-                        // Assumes Git credentials are set up on the agent (e.g., via SSH agent forwarding or .git-credentials file)
-                        echo "Attempting to push using pre-configured Git credentials on the agent."
-                        sh "git push origin ${branchName}"
+                        echo "Attempting to push using anonymous access or pre-configured Git credentials on the agent (GIT_CREDENTIAL_ID not provided or empty)."
                     }
+                    sh "git push origin ${branchName}"
                     echo "Changes pushed to branch ${branchName} on remote 'origin'."
                 }
             }
