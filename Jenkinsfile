@@ -32,10 +32,16 @@ pipeline {
 
         stage('Initialize Workspace') {
             steps {
-                echo "Cloning repository: ${params.GIT_REPO_URL} and checking out branch: ${params.GIT_BRANCH}"
-                // Clone the specified repository into the current workspace directory
-                sh "git clone ${params.GIT_REPO_URL} ."
-                sh "git checkout ${params.GIT_BRANCH}"
+                echo "Initializing/refreshing workspace for repository: ${params.GIT_REPO_URL}, branch: ${params.GIT_BRANCH}"
+                sh "git init"
+                sh "git remote rm origin || true" // Remove existing origin, if any, ignore error if not present
+                sh "git remote add origin ${params.GIT_REPO_URL}"
+                sh "git fetch origin ${params.GIT_BRANCH}" // Fetch updates for the specified branch
+                sh "git checkout -f ${params.GIT_BRANCH}" // Switch to or create the local branch, force if necessary
+                // Reset the local branch to exactly match the state of the remote branch
+                sh "git reset --hard origin/${params.GIT_BRANCH}"
+                // Remove any untracked files and directories to ensure a clean workspace
+                sh "git clean -fdx"
                 sh "git status" // Verify Git repository and branch
             }
         }
