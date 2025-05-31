@@ -5,6 +5,8 @@ pipeline {
         string(name: 'PROMPT', description: 'Prompt for OpenAI Codex')
         credentials(name: 'OPENAI_API_KEY_CREDENTIAL_ID', description: 'Jenkins Credential ID for OpenAI API Key (Secret text type)', required: true, credentialType: 'com.cloudbees.plugins.credentials.impl.StringCredentialsImpl')
         string(name: 'OPENAI_API_BASE_URL', defaultValue: 'https://api.openai.com/v1', description: 'OpenAI API Base URL (e.g., for Azure OpenAI or other providers)')
+        string(name: 'GIT_REPO_URL', description: 'Git repository URL to clone')
+        string(name: 'GIT_BRANCH', defaultValue: 'master', description: 'Git branch to checkout')
         string(name: 'GIT_USER_NAME', defaultValue: 'Jenkins CI', description: 'Git user name for commits')
         string(name: 'GIT_USER_EMAIL', defaultValue: 'jenkins@example.com', description: 'Git user email for commits')
         credentials(name: 'GIT_CREDENTIAL_ID', description: 'Jenkins Credential ID for Git push (optional, e.g., SSH key or username/password if not globally configured on agent)', credentialType: "com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl")
@@ -21,16 +23,20 @@ pipeline {
                     if (!params.OPENAI_API_KEY_CREDENTIAL_ID) {
                         error "OPENAI_API_KEY_CREDENTIAL_ID parameter is required."
                     }
+                    if (!params.GIT_REPO_URL) {
+                        error "GIT_REPO_URL parameter is required."
+                    }
                 }
             }
         }
 
         stage('Initialize Workspace') {
             steps {
-                echo "Ensuring workspace is a Git repository."
-                // This step assumes Jenkins SCM has already cloned the repository.
-                // If not, you would add a git clone step here.
-                sh 'git status' // Verify Git repository
+                echo "Cloning repository: ${params.GIT_REPO_URL} and checking out branch: ${params.GIT_BRANCH}"
+                // Clone the specified repository into the current workspace directory
+                sh "git clone ${params.GIT_REPO_URL} ."
+                sh "git checkout ${params.GIT_BRANCH}"
+                sh "git status" // Verify Git repository and branch
             }
         }
 
