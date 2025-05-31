@@ -88,7 +88,7 @@ pipeline {
                         echo "Invoking Codex with prompt: '${params.PROMPT}'"
                         
                         # Since it's installed locally, we use the path from node_modules
-                        ./node_modules/.bin/codex "${params.PROMPT}" --model "${params.MODEL}" --approval-mode full-auto
+                        ./node_modules/.bin/codex "${params.PROMPT}" --model "${params.MODEL}" -a auto-edit --quiet
                     """
                 }
             }
