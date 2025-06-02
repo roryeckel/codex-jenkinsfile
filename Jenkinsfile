@@ -11,6 +11,7 @@ pipeline {
         string(name: 'GIT_USER_EMAIL', defaultValue: 'jenkins@example.com', description: 'Git user email for commits')
         credentials(name: 'GIT_CREDENTIAL_ID', description: 'Jenkins Credential ID for Git push (optional, e.g., SSH key or username/password if not globally configured on agent)', credentialType: "com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl")
         string(name: 'MODEL', defaultValue: 'openai/gpt-4.1', description: 'Model to use for OpenAI Codex')
+        booleanParam(name: 'ENABLE_GIT_PUSH', defaultValue: false, description: 'Enable automatic git push after Codex changes')
     }
 
     stages {
@@ -122,16 +123,18 @@ pipeline {
                     sh "git add ." // Stage all changes
                     sh "git commit -m 'Changes by Codex (Build ${BUILD_NUMBER})\n\nPrompt: ${params.PROMPT}'"
 
-                    echo "Committing and pushing to branch ${branchName}..."
-                    // The 'origin' remote should have been configured with credentials in the 'Initialize Workspace' stage 
-                    // if GIT_CREDENTIAL_ID was provided and is of Username/Password type.
-                    if (params.GIT_CREDENTIAL_ID != null && !params.GIT_CREDENTIAL_ID.isEmpty()) {
-                        echo "Attempting to push using credentials provided by GIT_CREDENTIAL_ID (expected to be embedded in 'origin' remote URL)."
+                    if (params.ENABLE_GIT_PUSH) {
+                        echo "Committing and pushing to branch ${branchName}..."
+                        if (params.GIT_CREDENTIAL_ID != null && !params.GIT_CREDENTIAL_ID.isEmpty()) {
+                            echo "Attempting to push using credentials provided by GIT_CREDENTIAL_ID (expected to be embedded in 'origin' remote URL)."
+                        } else {
+                            echo "Attempting to push using anonymous access or pre-configured Git credentials on the agent (GIT_CREDENTIAL_ID not provided or empty)."
+                        }
+                        sh "git push origin ${branchName}"
+                        echo "Changes pushed to branch ${branchName} on remote 'origin'."
                     } else {
-                        echo "Attempting to push using anonymous access or pre-configured Git credentials on the agent (GIT_CREDENTIAL_ID not provided or empty)."
+                        echo "ENABLE_GIT_PUSH is false. Skipping git push step."
                     }
-                    sh "git push origin ${branchName}"
-                    echo "Changes pushed to branch ${branchName} on remote 'origin'."
                 }
             }
         }
