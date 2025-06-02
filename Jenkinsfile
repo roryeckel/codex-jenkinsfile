@@ -70,13 +70,6 @@ pipeline {
             }
         }
 
-        stage('Install Codex CLI') {
-            steps {
-                echo "Installing OpenAI Codex CLI..."
-                sh 'npm install @openai/codex'
-            }
-        }
-
         stage('Invoke Codex') {
             steps {
                 withCredentials([string(credentialsId: params.OPENAI_API_KEY_CREDENTIAL_ID, variable: 'API_KEY_SECRET')]) {
@@ -87,8 +80,7 @@ pipeline {
                         echo "OpenAI API Key and Base URL environment variables set."
                         echo "Invoking Codex with prompt: '${params.PROMPT}'"
                         
-                        # Since it's installed locally, we use the path from node_modules
-                        ./node_modules/.bin/codex "${params.PROMPT}" --model "${params.MODEL}" -a auto-edit --quiet
+                        codex "${params.PROMPT}" --model "${params.MODEL}" -a auto-edit --quiet
                     """
                 }
             }
