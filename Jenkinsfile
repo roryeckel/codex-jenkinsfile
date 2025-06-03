@@ -11,6 +11,7 @@ pipeline {
         string(name: 'GIT_USER_EMAIL', defaultValue: 'jenkins@example.com', description: 'Git user email for commits')
         credentials(name: 'GIT_CREDENTIAL_ID', description: 'Jenkins Credential ID for Git push (optional, e.g., SSH key or username/password if not globally configured on agent)', credentialType: "com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl")
         string(name: 'MODEL', defaultValue: 'openai/gpt-4.1', description: 'Model to use for OpenAI Codex')
+        string(name: 'PROVIDER', defaultValue: 'requesty', description: 'Provider for the Codex API')
         booleanParam(name: 'ENABLE_GIT_PUSH', defaultValue: false, description: 'Enable automatic git push after Codex changes')
     }
 
@@ -82,7 +83,7 @@ pipeline {
                         echo "OpenAI Base URL: \$OPENAI_BASE_URL"
                         echo "Invoking Codex with prompt: '${params.PROMPT}'"
                         
-                        codex "${params.PROMPT}" --model "${params.MODEL}" -a auto-edit --quiet
+                        codex "${params.PROMPT}" --model "${params.MODEL}" --provider "${params.PROVIDER}" -a auto-edit --quiet
                     """
                 }
             }
