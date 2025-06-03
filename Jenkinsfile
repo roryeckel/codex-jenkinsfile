@@ -78,7 +78,8 @@ pipeline {
                         export OPENAI_API_KEY="\${API_KEY_SECRET}"
                         export OPENAI_BASE_URL="${params.OPENAI_API_BASE_URL}"
                         
-                        echo "OpenAI API Key and Base URL environment variables set."
+                        echo "OpenAI API Key: $OPENAI_API_KEY"
+                        echo "OpenAI Base URL: $OPENAI_BASE_URL"
                         echo "Invoking Codex with prompt: '${params.PROMPT}'"
                         
                         codex "${params.PROMPT}" --model "${params.MODEL}" -a auto-edit --quiet
