@@ -11,7 +11,7 @@ pipeline {
         string(name: 'GIT_USER_EMAIL', defaultValue: 'jenkins@example.com', description: 'Git user email for commits')
         credentials(name: 'GIT_CREDENTIAL_ID', description: 'Jenkins Credential ID for Git push (optional, e.g., SSH key or username/password if not globally configured on agent)', credentialType: "com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl")
         string(name: 'MODEL', defaultValue: 'openai/gpt-4.1', description: 'Model to use for OpenAI Codex')
-        string(name: 'PROVIDER', defaultValue: 'requesty', description: 'Provider for the Codex API')
+        string(name: 'PROVIDER', defaultValue: 'requesty', description: 'OpenAI-compatible provider to use (openai, requesty, etc...)')
         booleanParam(name: 'ENABLE_GIT_PUSH', defaultValue: false, description: 'Enable automatic git push after Codex changes')
     }
 
@@ -52,7 +52,11 @@ pipeline {
                             def authenticatedRepoUrl = "https://${encodedUsername}:${encodedPassword}@${repoUrlNoProto}"
                             
                             echo "Configuring remote 'origin' with URL-encoded credentials."
-                            sh "git remote add origin \"${authenticatedRepoUrl}\""
+                            // Use withEnv to scope the environment variable containing the sensitive URL
+                            // and avoid direct Groovy string interpolation of the secret in the sh step.
+                            withEnv(["AUTHENTICATED_REPO_URL_FOR_GIT=${authenticatedRepoUrl}"]) {
+                                sh 'git remote add origin "$AUTHENTICATED_REPO_URL_FOR_GIT"'
+                            }
                             sh "git fetch origin ${params.GIT_BRANCH}"
                             sh "git checkout -f ${params.GIT_BRANCH}" // Switch to or create the local branch, force if necessary
                             sh "git reset --hard origin/${params.GIT_BRANCH}" // Reset the local branch to exactly match the state of the remote branch
