@@ -5,14 +5,14 @@ pipeline {
         string(name: 'PROMPT', description: 'Prompt for OpenAI Codex')
         credentials(name: 'OPENAI_API_KEY_CREDENTIAL_ID', description: 'Jenkins Credential ID for OpenAI API Key (Secret text type)', required: true, credentialType: 'com.cloudbees.plugins.credentials.impl.StringCredentialsImpl')
         string(name: 'OPENAI_API_BASE_URL', defaultValue: 'https://router.requesty.ai/v1', description: 'OpenAI API Base URL (e.g., for Azure OpenAI or other providers)')
-        string(name: 'GIT_REPO_URL', description: 'Git repository URL to clone')
+        string(name: 'GIT_REPO_URL', description: 'Git repository URL to clone into the workspace for Codex')
         string(name: 'GIT_BRANCH', defaultValue: 'master', description: 'Git branch to checkout')
         string(name: 'GIT_USER_NAME', defaultValue: 'Jenkins CI', description: 'Git user name for commits')
         string(name: 'GIT_USER_EMAIL', defaultValue: 'jenkins@example.com', description: 'Git user email for commits')
-        credentials(name: 'GIT_CREDENTIAL_ID', description: 'Jenkins Credential ID for Git push (optional, e.g., SSH key or username/password if not globally configured on agent)', credentialType: "com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl")
+        credentials(name: 'GIT_CREDENTIAL_ID', description: 'Jenkins Credential ID for cloning and pushing (optional, e.g., SSH key or username/password if not globally configured on agent)', credentialType: "com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl")
         string(name: 'MODEL', defaultValue: 'openai/gpt-4.1', description: 'Model to use for OpenAI Codex')
         string(name: 'PROVIDER', defaultValue: 'requesty', description: 'OpenAI-compatible provider to use (openai, requesty, etc...)')
-        booleanParam(name: 'ENABLE_GIT_PUSH', defaultValue: false, description: 'Enable automatic git push after Codex changes')
+        booleanParam(name: 'ENABLE_GIT_PUSH', defaultValue: false, description: 'Create and push any leftover changes to new branch after Codex has exited (like: codex-build-<BUILD_NUMBER>)')
     }
 
     stages {
