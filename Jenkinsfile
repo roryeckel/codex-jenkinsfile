@@ -13,6 +13,7 @@ pipeline {
         string(name: 'MODEL', defaultValue: 'openai/gpt-4.1', description: 'Model to use for OpenAI Codex')
         string(name: 'PROVIDER', defaultValue: 'openai', description: 'OpenAI-compatible provider to use (openai, requesty, etc...)')
         booleanParam(name: 'ENABLE_GIT_PUSH', defaultValue: false, description: 'Create and push any leftover changes to new branch after Codex has exited (like: codex-build-<BUILD_NUMBER>)')
+        booleanParam(name: 'ENABLE_SUBMODULES', defaultValue: false, description: 'Initialize and update Git submodules after repository checkout')
     }
 
     stages {
@@ -69,6 +70,16 @@ pipeline {
                         sh "git reset --hard origin/${params.GIT_BRANCH}"
                     }
                     
+                    // Initialize and update submodules if requested
+                    if (params.ENABLE_SUBMODULES) {
+                        echo "ENABLE_SUBMODULES is true. Initializing and updating Git submodules..."
+                        sh "git submodule init"
+                        sh "git submodule update --recursive"
+                        echo "Git submodules initialized and updated."
+                    } else {
+                        echo "ENABLE_SUBMODULES is false. Skipping submodule initialization."
+                    }
+                    
                     // Remove any untracked files and directories to ensure a clean workspace
                     sh "git clean -fdx"
                     sh "git status" // Verify Git repository and branch
@@ -102,6 +113,13 @@ pipeline {
                     if (changes) {
                         echo "Changes detected by Codex:"
                         sh 'git status --short' // Show a summary of changes
+                        
+                        // Show submodule status if submodules are enabled
+                        if (params.ENABLE_SUBMODULES) {
+                            echo "Checking submodule status:"
+                            sh 'git submodule status || echo "No submodules found or submodule status unavailable"'
+                        }
+                        
                         env.CHANGES_DETECTED = "true"
                     } else {
                         echo "No changes detected by Codex."
