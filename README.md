@@ -101,8 +101,12 @@ The `Jenkinsfile` is structured into the following stages:
 5.  **Commit and Push Changes**:
     *   This stage runs only if `CHANGES_DETECTED` is `true`.
     *   Configures Git user name and email using `GIT_USER_NAME` and `GIT_USER_EMAIL`.
-    *   Creates a new branch named `codex-build-<BUILD_NUMBER>`.
-    *   Stages all changes (`git add .`).
+    *   If `ENABLE_SUBMODULES` is `true`, first commits any changes within submodules:
+        *   Iterates through all submodules and checks for changes in each one.
+        *   For submodules with changes, creates a branch, commits changes, and optionally pushes to the submodule's remote.
+        *   This ensures submodule references are properly updated before the parent commit.
+    *   Creates a new branch named `codex-build-<BUILD_NUMBER>` in the parent repository.
+    *   Stages all changes including updated submodule references (`git add .`).
     *   Commits the changes with a message indicating they were made by Codex, including the build number and the original prompt.
     *   If `ENABLE_GIT_PUSH` is `true`, it pushes the new branch to the remote `origin`.
 

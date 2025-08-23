@@ -143,12 +143,53 @@ pipeline {
                     sh "git config user.name '${params.GIT_USER_NAME}' || true"
                     sh "git config user.email '${params.GIT_USER_EMAIL}' || true"
                     
+                    // Handle submodule commits first if submodules are enabled
+                    if (params.ENABLE_SUBMODULES) {
+                        echo "ENABLE_SUBMODULES is true. Checking for submodule changes and committing them first..."
+                        
+                        // Get list of submodules
+                        def submodules = sh(script: 'git submodule status | awk \'{print $2}\' || echo ""', returnStdout: true).trim()
+                        if (submodules) {
+                            submodules.split('\n').each { submodule ->
+                                if (submodule.trim()) {
+                                    echo "Checking submodule: ${submodule}"
+                                    
+                                    // Check if there are changes in this submodule
+                                    def submoduleChanges = sh(script: "cd '${submodule}' && git status --porcelain", returnStdout: true).trim()
+                                    if (submoduleChanges) {
+                                        echo "Changes detected in submodule ${submodule}. Committing..."
+                                        
+                                        // Configure git user in submodule
+                                        sh "cd '${submodule}' && git config user.name '${params.GIT_USER_NAME}' || true"
+                                        sh "cd '${submodule}' && git config user.email '${params.GIT_USER_EMAIL}' || true"
+                                        
+                                        // Commit changes in submodule
+                                        sh "cd '${submodule}' && git checkout -b ${branchName} || git checkout ${branchName}"
+                                        sh "cd '${submodule}' && git add ."
+                                        sh "cd '${submodule}' && git commit -m 'Changes by Codex in submodule (Build ${BUILD_NUMBER})\\n\\nPrompt: ${params.PROMPT}'"
+                                        
+                                        // Push submodule changes if enabled and credentials available
+                                        if (params.ENABLE_GIT_PUSH) {
+                                            echo "Pushing submodule ${submodule} changes to branch ${branchName}..."
+                                            sh "cd '${submodule}' && git push origin ${branchName} || echo 'Failed to push submodule ${submodule} - may not have push access or remote not configured'"
+                                        }
+                                    } else {
+                                        echo "No changes detected in submodule ${submodule}."
+                                    }
+                                }
+                            }
+                        } else {
+                            echo "No submodules found."
+                        }
+                    }
+                    
+                    // Now commit the parent repository (this will include updated submodule references)
                     sh "git checkout -b ${branchName}"
-                    sh "git add ." // Stage all changes
+                    sh "git add ." // Stage all changes including submodule reference updates
                     sh "git commit -m 'Changes by Codex (Build ${BUILD_NUMBER})\n\nPrompt: ${params.PROMPT}'"
 
                     if (params.ENABLE_GIT_PUSH) {
-                        echo "Committing and pushing to branch ${branchName}..."
+                        echo "Committing and pushing parent repository to branch ${branchName}..."
                         if (params.GIT_CREDENTIAL_ID != null && !params.GIT_CREDENTIAL_ID.isEmpty()) {
                             echo "Attempting to push using credentials provided by GIT_CREDENTIAL_ID (expected to be embedded in 'origin' remote URL)."
                         } else {
