@@ -1,3 +1,21 @@
+def gitPushWithAskpass(String gitCommand) {
+    return """
+        set -eu
+        tmp_askpass=\$(mktemp)
+        trap 'rm -f "\$tmp_askpass"' EXIT
+        cat <<'EOF' > "\$tmp_askpass"
+#!/bin/sh
+case "\$1" in
+  Username*) printf '%s\\n' "\${GIT_PUSH_USERNAME}" ;;
+  Password*) printf '%s\\n' "\${GIT_PUSH_PASSWORD}" ;;
+  *) exit 1 ;;
+esac
+EOF
+        chmod +x "\$tmp_askpass"
+        GIT_ASKPASS="\$tmp_askpass" GIT_TERMINAL_PROMPT=0 ${gitCommand}
+    """
+}
+
 pipeline {
     agent any // Specify a particular agent if needed (e.g., one with Node.js/npm and Git)
 
@@ -211,21 +229,7 @@ pipeline {
                                                 def isHttpRemote = pushRemoteUrl.startsWith("http://") || pushRemoteUrl.startsWith("https://")
                                                 if (isHttpRemote && params.GIT_CREDENTIAL_ID && !params.GIT_CREDENTIAL_ID.trim().isEmpty()) {
                                                     withCredentials([usernamePassword(credentialsId: params.GIT_CREDENTIAL_ID, usernameVariable: 'GIT_PUSH_USERNAME', passwordVariable: 'GIT_PUSH_PASSWORD')]) {
-                                                        sh """
-                                                            set -eu
-                                                            tmp_askpass=\$(mktemp)
-                                                            trap 'rm -f "\$tmp_askpass"' EXIT
-                                                            cat <<'EOF' > "\$tmp_askpass"
-#!/bin/sh
-case "\$1" in
-  Username*) printf '%s\\n' "\${GIT_PUSH_USERNAME}" ;;
-  Password*) printf '%s\\n' "\${GIT_PUSH_PASSWORD}" ;;
-  *) exit 1 ;;
-esac
-EOF
-                                                            chmod +x "\$tmp_askpass"
-                                                            GIT_ASKPASS="\$tmp_askpass" GIT_TERMINAL_PROMPT=0 git -C '${submodule}' push -u ${pushRemoteName} ${branchName}
-                                                        """
+                                                        sh gitPushWithAskpass("git -C '${submodule}' push -u ${pushRemoteName} ${branchName}")
                                                     }
                                                 } else if (isHttpRemote) {
                                                     echo "HTTP(S) push remote detected for ${submodule} but no credentials provided; attempting unauthenticated push."
@@ -282,21 +286,7 @@ EOF
                             def parentPushIsHttp = parentPushUrl.startsWith("http://") || parentPushUrl.startsWith("https://")
                             if (parentPushIsHttp && params.GIT_CREDENTIAL_ID && !params.GIT_CREDENTIAL_ID.trim().isEmpty()) {
                                 withCredentials([usernamePassword(credentialsId: params.GIT_CREDENTIAL_ID, usernameVariable: 'GIT_PUSH_USERNAME', passwordVariable: 'GIT_PUSH_PASSWORD')]) {
-                                    sh """
-                                        set -eu
-                                        tmp_askpass=\$(mktemp)
-                                        trap 'rm -f "\$tmp_askpass"' EXIT
-                                        cat <<'EOF' > "\$tmp_askpass"
-#!/bin/sh
-case "\$1" in
-  Username*) printf '%s\\n' "\${GIT_PUSH_USERNAME}" ;;
-  Password*) printf '%s\\n' "\${GIT_PUSH_PASSWORD}" ;;
-  *) exit 1 ;;
-esac
-EOF
-                                        chmod +x "\$tmp_askpass"
-                                        GIT_ASKPASS="\$tmp_askpass" GIT_TERMINAL_PROMPT=0 git push -u origin ${branchName}
-                                    """
+                                    sh gitPushWithAskpass("git push -u origin ${branchName}")
                                 }
                             } else if (parentPushIsHttp) {
                                 echo "HTTP(S) remote detected but no credentials supplied; attempting unauthenticated parent push."
