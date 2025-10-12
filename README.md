@@ -12,8 +12,8 @@ This repo contains a Jenkins declarative pipeline (`Jenkinsfile`) designed to au
 
 *   **Parameter Validation**: Ensures all required Jenkins job parameters are provided before execution.
 *   **Workspace Initialization**: Clones or updates the specified Git repository and branch, ensuring a clean workspace for Codex operations.
-*   **Git Submodule Support**: Optionally initializes and updates Git submodules when `ENABLE_SUBMODULES` is enabled.
-*   **Git Authentication**: Supports Git authentication using Jenkins credentials for private repositories.
+*   **Git Submodule Support**: Optionally synchronizes, initializes, and updates Git submodules when `ENABLE_SUBMODULES` is enabled, committing submodule updates before the parent repository.
+*   **Git Authentication**: Supports Git authentication using Jenkins credentials for private repositories and wraps HTTPS pushes in temporary credential helpers.
 *   **Codex Invocation**: Executes the OpenAI Codex CLI with a user-defined prompt, model, and API provider.
 *   **Change Detection**: Checks for any file modifications made by Codex within the repository.
 *   **Automated Commits & Pushes**: Optionally commits detected changes to a new branch (e.g., `codex-build-<BUILD_NUMBER>`) and pushes it to the remote repository.
@@ -103,12 +103,14 @@ The `Jenkinsfile` is structured into the following stages:
     *   Configures Git user name and email using `GIT_USER_NAME` and `GIT_USER_EMAIL`.
     *   If `ENABLE_SUBMODULES` is `true`, first commits any changes within submodules:
         *   Iterates through all submodules and checks for changes in each one.
-        *   For submodules with changes, creates a branch, commits changes, and optionally pushes to the submodule's remote.
-        *   This ensures submodule references are properly updated before the parent commit.
-    *   Creates a new branch named `codex-build-<BUILD_NUMBER>` in the parent repository.
-    *   Stages all changes including updated submodule references (`git add .`).
-    *   Commits the changes with a message indicating they were made by Codex, including the build number and the original prompt.
-    *   If `ENABLE_GIT_PUSH` is `true`, it pushes the new branch to the remote `origin`.
+        *   For submodules with changes, force-updates or recreates the working branch, commits changes, and optionally pushes to the submodule's push remote.
+        *   Submodule pointer updates are validated in the parent repository before committing.
+    *   Creates (or resets) a branch named `codex-build-<BUILD_NUMBER>` in the parent repository.
+    *   Stages all changes, including submodule reference updates, with `git add -A`.
+    *   Commits the changes with a message indicating they were made by Codex, including the build number and original prompt.
+    *   If `ENABLE_GIT_PUSH` is `true`, it pushes the new branch to the remote `origin`, using Jenkins credentials for HTTPS remotes when provided.
+
+> **Note:** When pushing, the pipeline discovers each submodule's first available push remote (not necessarily named `origin`). Ensure the Jenkins credential has write access to every submodule push target and that HTTPS remotes are configured when password-based authentication is required.
 
 ## About OpenAI Codex
 
