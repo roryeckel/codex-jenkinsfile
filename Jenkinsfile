@@ -1,3 +1,21 @@
+def gitPushWithAskpass(String gitCommand) {
+    return """
+        set -eu
+        tmp_askpass=\$(mktemp)
+        trap 'rm -f "\$tmp_askpass"' EXIT
+        cat <<'EOF' > "\$tmp_askpass"
+#!/bin/sh
+case "\$1" in
+  Username*) printf '%s\\n' "\${GIT_PUSH_USERNAME}" ;;
+  Password*) printf '%s\\n' "\${GIT_PUSH_PASSWORD}" ;;
+  *) exit 1 ;;
+esac
+EOF
+        chmod +x "\$tmp_askpass"
+        GIT_ASKPASS="\$tmp_askpass" GIT_TERMINAL_PROMPT=0 ${gitCommand}
+    """
+}
+
 pipeline {
     agent any // Specify a particular agent if needed (e.g., one with Node.js/npm and Git)
 
@@ -13,6 +31,7 @@ pipeline {
         string(name: 'MODEL', defaultValue: 'gpt-5-codex', description: 'Model to use for OpenAI Codex')
         string(name: 'PROVIDER', defaultValue: 'openai', description: 'OpenAI-compatible provider to use (openai, requesty, etc...)')
         booleanParam(name: 'ENABLE_GIT_PUSH', defaultValue: false, description: 'Create and push any leftover changes to new branch after Codex has exited (like: codex-build-<BUILD_NUMBER>)')
+        booleanParam(name: 'ENABLE_SUBMODULES', defaultValue: false, description: 'Initialize and update Git submodules after repository checkout')
     }
 
     stages {
@@ -69,6 +88,16 @@ pipeline {
                         sh "git reset --hard origin/${params.GIT_BRANCH}"
                     }
                     
+                    // Initialize and update submodules if requested
+                    if (params.ENABLE_SUBMODULES) {
+                        echo "ENABLE_SUBMODULES is true. Initializing and updating Git submodules..."
+                        sh "git submodule init"
+                        sh "git submodule update --recursive"
+                        echo "Git submodules initialized and updated."
+                    } else {
+                        echo "ENABLE_SUBMODULES is false. Skipping submodule initialization."
+                    }
+                    
                     // Remove any untracked files and directories to ensure a clean workspace
                     sh "git clean -fdx"
                     sh "git status" // Verify Git repository and branch
@@ -102,6 +131,13 @@ pipeline {
                     if (changes) {
                         echo "Changes detected by Codex:"
                         sh 'git status --short' // Show a summary of changes
+                        
+                        // Show submodule status if submodules are enabled
+                        if (params.ENABLE_SUBMODULES) {
+                            echo "Checking submodule status:"
+                            sh 'git submodule status || echo "No submodules found or submodule status unavailable"'
+                        }
+                        
                         env.CHANGES_DETECTED = "true"
                     } else {
                         echo "No changes detected by Codex."
@@ -124,22 +160,143 @@ pipeline {
                     // Using || true to avoid failure if already configured or not permitted to change global config
                     sh "git config user.name '${params.GIT_USER_NAME}' || true"
                     sh "git config user.email '${params.GIT_USER_EMAIL}' || true"
-                    
-                    sh "git checkout -b ${branchName}"
-                    sh "git add ." // Stage all changes
-                    sh "git commit -m 'Changes by Codex (Build ${BUILD_NUMBER})\n\nPrompt: ${params.PROMPT}'"
 
-                    if (params.ENABLE_GIT_PUSH) {
-                        echo "Committing and pushing to branch ${branchName}..."
-                        if (params.GIT_CREDENTIAL_ID != null && !params.GIT_CREDENTIAL_ID.isEmpty()) {
-                            echo "Attempting to push using credentials provided by GIT_CREDENTIAL_ID (expected to be embedded in 'origin' remote URL)."
+                    def submoduleCommitsCreated = false
+                    
+                    // Handle submodule commits first if submodules are enabled
+                    if (params.ENABLE_SUBMODULES) {
+                        echo "ENABLE_SUBMODULES is true. Checking for submodule changes and committing them first..."
+
+                        // Ensure submodule URLs are current before updating content
+                        sh "git submodule sync --recursive || true"
+                        sh "git submodule update --init --recursive || true"
+
+                        // Get list of submodules using a robust, path-aware approach
+                        def submodules = sh(
+                            script: "git submodule foreach --recursive 'printf %s\\\\n \"\\$sm_path\"' || true",
+                            returnStdout: true
+                        ).trim()
+                        if (submodules) {
+                            submodules.split('\n').each { submodulePath ->
+                                def submodule = submodulePath.trim()
+                                if (submodule) {
+                                    echo "Checking submodule: ${submodule}"
+                                    
+                                    // Check if there are changes in this submodule
+                                    def submoduleChanges = sh(
+                                        script: "git -C '${submodule}' status --porcelain",
+                                        returnStdout: true
+                                    ).trim()
+                                    if (submoduleChanges) {
+                                        echo "Changes detected in submodule ${submodule}. Committing..."
+                                        
+                                        // Configure git user in submodule
+                                        sh "git -C '${submodule}' config user.name '${params.GIT_USER_NAME}' || true"
+                                        sh "git -C '${submodule}' config user.email '${params.GIT_USER_EMAIL}' || true"
+                                        
+                                        // Commit changes in submodule
+                                        sh "git -C '${submodule}' checkout -B ${branchName}"
+                                        sh "git -C '${submodule}' add -A"
+                                        sh "git -C '${submodule}' commit -m 'Changes by Codex in submodule (Build ${BUILD_NUMBER})\\n\\nPrompt: ${params.PROMPT}' || true"
+                                        submoduleCommitsCreated = true
+                                        
+                                        // Push submodule changes if enabled and credentials available
+                                        if (params.ENABLE_GIT_PUSH) {
+                                            echo "Attempting to push submodule ${submodule} changes to branch ${branchName}..."
+
+                                            def remoteNamesRaw = sh(
+                                                script: "git -C '${submodule}' remote",
+                                                returnStdout: true
+                                            ).trim()
+                                            def pushRemoteName = null
+                                            def pushRemoteUrl = null
+                                            if (remoteNamesRaw) {
+                                                remoteNamesRaw.split('\n').each { remoteName ->
+                                                    if (!pushRemoteName) {
+                                                        def candidateUrl = sh(
+                                                            script: "git -C '${submodule}' remote get-url --push ${remoteName} || true",
+                                                            returnStdout: true
+                                                        ).trim()
+                                                        if (candidateUrl) {
+                                                            pushRemoteName = remoteName.trim()
+                                                            pushRemoteUrl = candidateUrl
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            if (pushRemoteName && pushRemoteUrl) {
+                                                def isHttpRemote = pushRemoteUrl.startsWith("http://") || pushRemoteUrl.startsWith("https://")
+                                                if (isHttpRemote && params.GIT_CREDENTIAL_ID && !params.GIT_CREDENTIAL_ID.trim().isEmpty()) {
+                                                    withCredentials([usernamePassword(credentialsId: params.GIT_CREDENTIAL_ID, usernameVariable: 'GIT_PUSH_USERNAME', passwordVariable: 'GIT_PUSH_PASSWORD')]) {
+                                                        sh gitPushWithAskpass("git -C '${submodule}' push -u ${pushRemoteName} ${branchName}")
+                                                    }
+                                                } else if (isHttpRemote) {
+                                                    echo "HTTP(S) push remote detected for ${submodule} but no credentials provided; attempting unauthenticated push."
+                                                    sh "git -C '${submodule}' push -u ${pushRemoteName} ${branchName} || echo 'Failed to push submodule ${submodule} without credentials'"
+                                                } else {
+                                                    sh "git -C '${submodule}' push -u ${pushRemoteName} ${branchName} || echo 'Failed to push submodule ${submodule}; ensure credentials or SSH keys allow pushing'"
+                                                }
+                                            } else {
+                                                echo "No push remote detected for ${submodule}; skipping push."
+                                            }
+                                        }
+                                    } else {
+                                        echo "No changes detected in submodule ${submodule}."
+                                    }
+                                }
+                            }
                         } else {
-                            echo "Attempting to push using anonymous access or pre-configured Git credentials on the agent (GIT_CREDENTIAL_ID not provided or empty)."
+                            echo "No submodules found."
                         }
-                        sh "git push origin ${branchName}"
-                        echo "Changes pushed to branch ${branchName} on remote 'origin'."
+                    }
+                    
+                    // Now commit the parent repository (this will include updated submodule references)
+                    sh "git checkout -B ${branchName}"
+                    sh "git add -A"
+                    def parentCommitCreated = false
+
+                    if (params.ENABLE_SUBMODULES && submoduleCommitsCreated) {
+                        def stagedSubmoduleSummary = sh(
+                            script: "git diff --cached --submodule=short",
+                            returnStdout: true
+                        ).trim()
+                        if (!stagedSubmoduleSummary) {
+                            error "Submodule commits were created but no submodule pointer updates are staged in the parent repository."
+                        }
+                        echo "Staged submodule updates:\n${stagedSubmoduleSummary}"
+                    }
+
+                    def parentStagedChanges = sh(script: "git diff --cached --stat", returnStdout: true).trim()
+                    if (parentStagedChanges) {
+                        echo "Parent repository staged changes:\n${parentStagedChanges}"
+                        sh "git commit -m 'Changes by Codex (Build ${BUILD_NUMBER})\\n\\nPrompt: ${params.PROMPT}'"
+                        parentCommitCreated = true
                     } else {
-                        echo "ENABLE_GIT_PUSH is false. Skipping git push step."
+                        echo "No staged changes detected in parent repository; skipping commit."
+                    }
+
+                    if (params.ENABLE_GIT_PUSH && parentCommitCreated) {
+                        echo "Preparing to push parent repository to branch ${branchName}..."
+
+                        def parentPushUrl = sh(script: "git remote get-url --push origin || true", returnStdout: true).trim()
+                        if (!parentPushUrl) {
+                            echo "No push URL configured for remote 'origin'; skipping parent push."
+                        } else {
+                            def parentPushIsHttp = parentPushUrl.startsWith("http://") || parentPushUrl.startsWith("https://")
+                            if (parentPushIsHttp && params.GIT_CREDENTIAL_ID && !params.GIT_CREDENTIAL_ID.trim().isEmpty()) {
+                                withCredentials([usernamePassword(credentialsId: params.GIT_CREDENTIAL_ID, usernameVariable: 'GIT_PUSH_USERNAME', passwordVariable: 'GIT_PUSH_PASSWORD')]) {
+                                    sh gitPushWithAskpass("git push -u origin ${branchName}")
+                                }
+                            } else if (parentPushIsHttp) {
+                                echo "HTTP(S) remote detected but no credentials supplied; attempting unauthenticated parent push."
+                                sh "git push -u origin ${branchName} || echo 'Failed to push parent repository without credentials.'"
+                            } else {
+                                sh "git push -u origin ${branchName} || echo 'Failed to push parent repository; ensure agent has required credentials.'"
+                            }
+                        }
+                    } else {
+                        echo "Skipping parent push because ENABLE_GIT_PUSH is false or no commit was created."
                     }
                 }
             }
